@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#101418">
+<title>Compteur du jour</title>
+<style>
+  :root {
+    --bg: #101418;
+    --surface: #1a2027;
+    --surface-2: #232b34;
+    --text: #e8ecef;
+    --muted: #8a97a3;
+    --ok: #4fd1a5;
+    --over: #f26d6d;
+    --line: #2c3641;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 20px 28px;
+    gap: 18px;
+  }
+
+  header { display: flex; flex-direction: column; gap: 4px; }
+  .label-input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    width: 100%;
+    outline: none;
+    border-bottom: 1px dashed transparent;
+  }
+  .label-input:focus { border-bottom-color: var(--muted); }
+  .date { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 22px;
+    align-items: stretch;
+    min-height: 300px;
+  }
+
+  .gauge {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .gauge-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 0%;
+    background: linear-gradient(180deg, #6fe3bc, var(--ok));
+    transition: height 0.45s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s;
+    border-radius: 0 0 999px 999px;
+  }
+  .gauge.over .gauge-fill { background: linear-gradient(180deg, #ff9b9b, var(--over)); }
+  .gauge-ticks {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: space-between;
+    padding: 10px 0;
+    pointer-events: none;
+  }
+  .tick { height: 1px; background: rgba(255,255,255,0.12); margin: 0 18px; }
+
+  .panel { display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+  .count {
+    font-size: 5rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+  }
+  .count.over { color: var(--over); }
+  .status { color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
+  .status strong { color: var(--text); }
+
+  .buttons { display: flex; gap: 12px; }
+  button.step {
+    flex: 1;
+    padding: 18px 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 0.08s, background 0.15s;
+  }
+  button.step:active { transform: scale(0.96); background: var(--surface-2); }
+  button.plus { background: var(--surface-2); border-color: #3a4652; }
+
+  .objectif-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .objectif-row input {
+    width: 64px;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    outline: none;
+  }
+  .objectif-row input:focus { border-color: var(--muted); }
+
+  .history { display: flex; flex-direction: column; gap: 10px; }
+  .history h2 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .history-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 30px;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .history-day { color: var(--muted); }
+  .history-bar {
+    height: 8px;
+    background: var(--surface);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .history-bar-fill {
+    height: 100%;
+    background: var(--ok);
+    border-radius: 999px;
+  }
+  .history-bar-fill.over { background: var(--over); }
+  .history-val { text-align: right; color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gauge-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <input class="label-input" id="labelInput" value="Suivi du jour" aria-label="Nom du compteur">
+    <div class="date" id="dateLine"></div>
+  </header>
+
+  <div class="main">
+    <div class="gauge" id="gauge" role="img" aria-label="Jauge de progression">
+      <div class="gauge-ticks" id="ticks"></div>
+      <div class="gauge-fill" id="gaugeFill"></div>
+    </div>
+    <div class="panel">
+      <div class="count" id="count">0</div>
+      <div class="status" id="status"></div>
+      <div class="buttons">
+        <button class="step" id="btnMinus" aria-label="Retirer 1">−1</button>
+        <button class="step plus" id="btnPlus" aria-label="Ajouter 1">+1</button>
+      </div>
+      <div class="objectif-row">
+        <span>Objectif quotidien</span>
+        <input type="number" id="objectifInput" min="1" value="3" inputmode="numeric">
+      </div>
+    </div>
+  </div>
+
+  <div class="history">
+    <h2>14 derniers jours</h2>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'compteur-jour-v1';
+
+  const els = {
+    label: document.getElementById('labelInput'),
+    date: document.getElementById('dateLine'),
+    gauge: document.getElementById('gauge'),
+    fill: document.getElementById('gaugeFill'),
+    ticks: document.getElementById('ticks'),
+    count: document.getElementById('count'),
+    status: document.getElementById('status'),
+    plus: document.getElementById('btnPlus'),
+    minus: document.getElementById('btnMinus'),
+    objectif: document.getElementById('objectifInput'),
+    historyList: document.getElementById('historyList'),
+  };
+
+  let state = {
+    label: 'Suivi du jour',
+    objectif: 3,
+    history: {} // { 'YYYY-MM-DD': nombre }
+  };
+
+  function todayKey() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const j = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + j;
+  }
+
+  function fmtDay(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* stockage indisponible */ }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        state.label = typeof parsed.label === 'string' ? parsed.label : state.label;
+        state.objectif = Math.max(1, parseInt(parsed.objectif, 10) || 3);
+        state.history = parsed.history && typeof parsed.history === 'object' ? parsed.history : {};
+      }
+    } catch (e) { /* première utilisation */ }
+  }
+
+  function buildTicks() {
+    els.ticks.innerHTML = '';
+    const n = Math.min(state.objectif, 12);
+    for (let i = 0; i <= n; i++) {
+      const t = document.createElement('div');
+      t.className = 'tick';
+      els.ticks.appendChild(t);
+    }
+  }
+
+  function render() {
+    const key = todayKey();
+    const val = state.history[key] || 0;
+    const pct = state.objectif > 0 ? Math.min((val / state.objectif) * 100, 100) : 0;
+    const over = val > state.objectif;
+
+    els.date.textContent = new Date().toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+    els.count.textContent = val;
+    els.count.classList.toggle('over', over);
+    els.gauge.classList.toggle('over', over);
+    els.fill.style.height = pct + '%';
+
+    if (over) {
+      els.status.innerHTML = 'Objectif dépassé de <strong>' + (val - state.objectif) + '</strong>';
+    } else if (val === state.objectif) {
+      els.status.innerHTML = 'Objectif atteint (<strong>' + state.objectif + '</strong>)';
+    } else {
+      els.status.innerHTML = 'Reste <strong>' + (state.objectif - val) + '</strong> avant l\u2019objectif';
+    }
+
+    els.label.value = state.label;
+    els.objectif.value = state.objectif;
+    buildTicks();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    els.historyList.innerHTML = '';
+    const keys = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const j = String(d.getDate()).padStart(2, '0');
+      keys.push(d.getFullYear() + '-' + m + '-' + j);
+    }
+    const maxVal = Math.max(state.objectif, ...keys.map(k => state.history[k] || 0), 1);
+
+    keys.forEach(k => {
+      const val = state.history[k] || 0;
+      const pct = Math.min((val / maxVal) * 100, 100);
+      const over = val > state.objectif;
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML =
+        '<div class="history-day">' + fmtDay(k) + '</div>' +
+        '<div class="history-bar"><div class="history-bar-fill' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+        '<div class="history-val">' + val + '</div>';
+      els.historyList.appendChild(row);
+    });
+  }
+
+  els.plus.addEventListener('click', () => {
+    const k = todayKey();
+    state.history[k] = (state.history[k] || 0) + 1;
+    save();
+    render();
+  });
+
+  els.minus.addEventListener('click', () => {
+    const k = todayKey();
+    state.history[k] = Math.max(0, (state.history[k] || 0) - 1);
+    save();
+    render();
+  });
+
+  els.objectif.addEventListener('change', () => {
+    state.objectif = Math.max(1, parseInt(els.objectif.value, 10) || 1);
+    els.objectif.value = state.objectif;
+    save();
+    render();
+  });
+
+  els.label.addEventListener('change', () => {
+    state.label = els.label.value;
+    save();
+  });
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
